@@ -14,7 +14,7 @@ import java.util.Locale
 
 // Denne fila er rein Kotlin/Java utan Android-klassar, slik at ho kan testast på PC-en.
 
-const val USER_AGENT = "Podspelar/0.2 (Android)"
+const val USER_AGENT = "Podspelar/0.3 (Android)"
 
 data class Podcast(
     val feedUrl: String,

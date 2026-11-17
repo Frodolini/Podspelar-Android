@@ -4,7 +4,7 @@ Enkel podkastspelar for Android.
 
 - **Finn poddar:** søk i Apple sin opne podkastkatalog (krev ingen konto eller nøkkel), eller lim inn ei RSS-adresse
 - **Favorittar:** stjernemerk ein pod, så viser startsida dei nyaste episodane frå alle favorittane
-- **Speleliste:** legg episodar i kø, flytt dei opp og ned, og la dei spela etter kvarandre. Ein episode forsvinn frå lista når han er høyrd ferdig
+- **Speleliste:** legg episodar i kø som neste eller sist, flytt dei opp og ned, og la dei spela etter kvarandre. Ein episode forsvinn frå lista når han er høyrd ferdig
 - **Nedlasting:** last ned enkeltepisodar for å høyra utan nett, elles blir lyden strøymd
 - **Avspeling i bakgrunnen:** kontrollar i varsellinja, på låseskjermen og på headset/bil
 - Hugsar kor langt du kom i kvar episode, hopp 15 s tilbake / 30 s fram, og val av fart

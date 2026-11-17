@@ -200,10 +200,21 @@ object Store {
 
     fun inPlaylist(id: String) = playlist.any { it.id == id }
 
-    /** Legg episoden sist i spelelista, eller tek han ut om han alt ligg der. */
-    fun togglePlaylist(e: Episode) {
-        val i = playlist.indexOfFirst { it.id == e.id }
-        if (i >= 0) playlist.removeAt(i) else playlist.add(e)
+    /** Legg episoden sist i spelelista. Ligg han der alt, blir han flytta. */
+    fun addLast(e: Episode) {
+        playlist.removeAll { it.id == e.id }
+        playlist.add(e)
+        savePlaylist()
+    }
+
+    /**
+     * Legg episoden som neste: rett etter den som blir spela no om han ligg i lista,
+     * elles heilt øvst. Ligg episoden der alt, blir han flytta.
+     */
+    fun addNext(e: Episode) {
+        playlist.removeAll { it.id == e.id }
+        val current = playlist.indexOfFirst { it.id == last?.id }
+        playlist.add(if (last?.id == e.id) 0 else current + 1, e)
         savePlaylist()
     }
 

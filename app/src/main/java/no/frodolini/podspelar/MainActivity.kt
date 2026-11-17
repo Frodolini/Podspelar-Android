@@ -46,6 +46,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -553,12 +555,29 @@ fun EpisodeRow(e: Episode, showPodcast: Boolean) {
             }
             // Spelelista: legg til / ta ut
             val queued = Store.inPlaylist(e.id)
-            IconButton(onClick = { Store.togglePlaylist(e) }, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    if (queued) IconPlaylistCheck else IconPlaylistAdd,
-                    contentDescription = if (queued) "Ligg i spelelista. Trykk for å ta ut." else "Legg i spelelista",
-                    tint = if (queued) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            var menu by remember(e.id) { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        if (queued) IconPlaylistCheck else IconPlaylistAdd,
+                        contentDescription = if (queued) "Ligg i spelelista" else "Legg i spelelista",
+                        tint = if (queued) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (queued) "Flytt til neste" else "Spel som neste") },
+                        onClick = { Store.addNext(e); menu = false },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (queued) "Flytt sist i spelelista" else "Legg sist i spelelista") },
+                        onClick = { Store.addLast(e); menu = false },
+                    )
+                    if (queued) DropdownMenuItem(
+                        text = { Text("Ta ut av spelelista") },
+                        onClick = { Store.removeFromPlaylist(e.id); menu = false },
+                    )
+                }
             }
             // Nedlasting: last ned / avbryt / slett
             val p = Store.progress[e.id]
@@ -609,7 +628,7 @@ fun PlaylistScreen() {
             Text("Spelelista er tom", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Trykk på liste-ikonet med pluss ved ein episode for å leggja han her. " +
+                "Trykk på liste-ikonet med pluss ved ein episode, og vel om han skal spelast som neste eller leggjast sist. " +
                     "Episodane blir spela etter kvarandre, og forsvinn frå lista når dei er høyrde ferdig.",
                 textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
