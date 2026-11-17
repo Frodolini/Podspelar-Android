@@ -128,16 +128,25 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_ENDED) {
-                player.currentMediaItem?.let { Store.setPos(it.mediaId, 0, player.duration.coerceAtLeast(0), true) }
+                val id = player.currentMediaItem?.mediaId ?: return
+                Store.setPos(id, 0, player.duration.coerceAtLeast(0), true)
+                // Spelelista: gå rett vidare til neste episode, også når appen ikkje er framme.
+                Store.nextAfterFinished(id)?.let { next ->
+                    Store.rememberLast(next)
+                    player.setMediaItem(mediaItemFor(next), startPositionFor(next))
+                    player.prepare()
+                    player.play()
+                }
             }
         }
 
         // Når ein ny episode tek over, hugs kor langt den førre kom.
         override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
             val oldId = old.mediaItem?.mediaId ?: return
-            if (oldId != new.mediaItem?.mediaId && old.positionMs > 0) {
-                val wasDone = Store.positions[oldId]?.done == true && old.positionMs < 2_000
-                if (!wasDone) Store.setPos(oldId, old.positionMs, 0, false)
+            // Ein episode som nett vart spela ferdig skal stå som høyrt, ikkje som «stoppa på slutten».
+            val finished = Store.positions[oldId]?.done == true
+            if (oldId != new.mediaItem?.mediaId && old.positionMs > 0 && !finished) {
+                Store.setPos(oldId, old.positionMs, 0, false)
             }
         }
     }
@@ -161,6 +170,30 @@ class PlaybackService : MediaSessionService() {
         session = null
         super.onDestroy()
     }
+}
+
+/** Der episoden skal starta: der ein slapp sist, eller frå byrjinga om han er høyrt ferdig. */
+fun startPositionFor(e: Episode): Long {
+    val saved = Store.positions[e.id]
+    return if (saved != null && !saved.done) saved.posMs else 0L
+}
+
+/** Nedlasta episodar blir spela frå fila, resten blir strøymde. */
+fun mediaItemFor(e: Episode): MediaItem {
+    val file = Store.fileFor(e)
+    val uri = if (Store.isDownloaded(e) && file.exists()) Uri.fromFile(file) else Uri.parse(e.audioUrl)
+    return MediaItem.Builder()
+        .setMediaId(e.id)
+        .setUri(uri)
+        .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(e.title)
+                .setArtist(e.podcastTitle)
+                .setArtworkUri(e.artUrl.takeIf { it.isNotBlank() }?.let(Uri::parse))
+                .build()
+        )
+        .build()
 }
 
 /** Appen si kopling til avspelingstenesta. Skjermane les tilstanden herfrå. */
@@ -222,21 +255,8 @@ object Playback {
         }
         Store.rememberLast(e)
         val saved = Store.positions[e.id]
-        val start = if (saved != null && !saved.done) saved.posMs else 0L
-        // Nedlasta episodar blir spela frå fila, resten blir strøymde.
-        val file = Store.fileFor(e)
-        val uri = if (Store.isDownloaded(e) && file.exists()) Uri.fromFile(file) else Uri.parse(e.audioUrl)
-        val item = MediaItem.Builder()
-            .setMediaId(e.id)
-            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(e.title)
-                    .setArtist(e.podcastTitle)
-                    .setArtworkUri(e.artUrl.takeIf { it.isNotBlank() }?.let(Uri::parse))
-                    .build()
-            )
-            .build()
+        val start = startPositionFor(e)
+        val item = mediaItemFor(e)
         posMs = start
         durMs = saved?.durMs ?: (e.durationSec * 1000L)
         c.setMediaItem(item, start)

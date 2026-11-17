@@ -40,6 +40,7 @@ object Store {
     val positions = mutableStateMapOf<String, Pos>()            // episode-id -> framdrift
     val downloads = mutableStateMapOf<String, Episode>()        // ferdig nedlasta
     val progress = mutableStateMapOf<String, Float>()           // nedlasting i gang, 0..1
+    val playlist = mutableStateListOf<Episode>()                // spelelista, i den rekkjefølgja ho skal spelast
     var last by mutableStateOf<Episode?>(null)                  // sist spela episode
     var speed by mutableStateOf(1f)
     var askedNotifications by mutableStateOf(false)
@@ -63,6 +64,9 @@ object Store {
                 val e = episodeFromJson(a.getJSONObject(i))
                 if (fileFor(e).exists()) downloads[e.id] = e
             }
+        }
+        readArray("speleliste.json")?.let { a ->
+            for (i in 0 until a.length()) playlist += episodeFromJson(a.getJSONObject(i))
         }
         readObject("innstillingar.json")?.let { o ->
             speed = o.optDouble("fart", 1.0).toFloat()
@@ -190,6 +194,52 @@ object Store {
         val a = JSONArray()
         downloads.values.forEach { a.put(episodeToJson(it)) }
         write("nedlasta.json", a.toString())
+    }
+
+    // ---- Spelelista ----
+
+    fun inPlaylist(id: String) = playlist.any { it.id == id }
+
+    /** Legg episoden sist i spelelista, eller tek han ut om han alt ligg der. */
+    fun togglePlaylist(e: Episode) {
+        val i = playlist.indexOfFirst { it.id == e.id }
+        if (i >= 0) playlist.removeAt(i) else playlist.add(e)
+        savePlaylist()
+    }
+
+    fun removeFromPlaylist(id: String) {
+        if (playlist.removeAll { it.id == id }) savePlaylist()
+    }
+
+    /** Flyttar ein episode eitt hakk opp (-1) eller ned (+1). */
+    fun movePlaylist(index: Int, delta: Int) {
+        val to = index + delta
+        if (index !in playlist.indices || to !in playlist.indices) return
+        playlist.add(to, playlist.removeAt(index))
+        savePlaylist()
+    }
+
+    fun clearPlaylist() {
+        playlist.clear()
+        savePlaylist()
+    }
+
+    /**
+     * Ein episode er spela ferdig. Låg han i spelelista, blir han teken ut,
+     * og den som stod etter han blir returnert slik at han kan spelast vidare.
+     */
+    fun nextAfterFinished(id: String): Episode? {
+        val i = playlist.indexOfFirst { it.id == id }
+        if (i < 0) return null
+        playlist.removeAt(i)
+        savePlaylist()
+        return playlist.getOrNull(i)
+    }
+
+    private fun savePlaylist() {
+        val a = JSONArray()
+        playlist.forEach { a.put(episodeToJson(it)) }
+        write("speleliste.json", a.toString())
     }
 
     // ---- Filer og JSON ----

@@ -94,6 +94,12 @@ private fun icon(name: String, path: String): ImageVector =
 
 val IconPause = icon("Pause", "M6,19h4V5H6v14zm8,-14v14h4V5h-4z")
 val IconDownload = icon("Last ned", "M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z")
+val IconPlaylistAdd = icon("Legg i spelelista", "M14,10H2v2h12v-2zm0,-4H2v2h12V6zm4,8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2,16h8v-2H2v2z")
+val IconPlaylistCheck = icon(
+    "I spelelista",
+    "M14,10H2v2h12v-2zm0,-4H2v2h12V6zM2,16h8v-2H2v2zm19.5,-4.5L23,13l-6.99,7 -4.51,-4.5L13,14l3.01,3 5.49,-5.5z",
+)
+val IconPlaylistPlay = icon("Speleliste", "M3,10h11v2H3zM3,6h11v2H3zM3,14h7v2H3zM16,13v8l6,-4z")
 val IconStarBorder = icon(
     "Stjerne",
     "M22,9.24l-7.19,-0.62L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21 12,17.27 18.18,21l-1.63,-7.03L22,9.24z" +

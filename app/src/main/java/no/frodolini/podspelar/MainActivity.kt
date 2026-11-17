@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,7 +36,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -238,6 +240,10 @@ fun App() {
                         )
                         NavigationBarItem(
                             selected = tab == 2, onClick = { tab = 2 },
+                            icon = { Icon(IconPlaylistPlay, null) }, label = { Text("Speleliste") },
+                        )
+                        NavigationBarItem(
+                            selected = tab == 3, onClick = { tab = 3 },
                             icon = { Icon(IconDownload, null) }, label = { Text("Nedlasta") },
                         )
                     }
@@ -255,6 +261,7 @@ fun App() {
                     results = results, onResults = { results = it },
                     openPod = { openPod = it },
                 )
+                tab == 2 -> PlaylistScreen()
                 else -> DownloadsScreen()
             }
         }
@@ -544,24 +551,34 @@ fun EpisodeRow(e: Episode, showPodcast: Boolean) {
                     Text(left, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
+            // Spelelista: legg til / ta ut
+            val queued = Store.inPlaylist(e.id)
+            IconButton(onClick = { Store.togglePlaylist(e) }, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    if (queued) IconPlaylistCheck else IconPlaylistAdd,
+                    contentDescription = if (queued) "Ligg i spelelista. Trykk for å ta ut." else "Legg i spelelista",
+                    tint = if (queued) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             // Nedlasting: last ned / avbryt / slett
             val p = Store.progress[e.id]
+            val small = Modifier.size(40.dp)
             when {
-                p != null -> IconButton(onClick = { DownloadService.cancel(ctx, e) }) {
+                p != null -> IconButton(onClick = { DownloadService.cancel(ctx, e) }, modifier = small) {
                     Box(contentAlignment = Alignment.Center) {
                         if (p > 0f) CircularProgressIndicator(progress = { p }, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
                         else CircularProgressIndicator(strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
                         Icon(Icons.Default.Close, contentDescription = "Avbryt nedlasting", modifier = Modifier.size(14.dp))
                     }
                 }
-                Store.isDownloaded(e) -> IconButton(onClick = { confirmDelete = true }) {
+                Store.isDownloaded(e) -> IconButton(onClick = { confirmDelete = true }, modifier = small) {
                     Icon(Icons.Default.Check, contentDescription = "Nedlasta. Trykk for å sletta.", tint = MaterialTheme.colorScheme.primary)
                 }
-                else -> IconButton(onClick = { DownloadService.start(ctx, e) }) {
+                else -> IconButton(onClick = { DownloadService.start(ctx, e) }, modifier = small) {
                     Icon(IconDownload, contentDescription = "Last ned", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            IconButton(onClick = { if (playingThis) Playback.toggle() else Playback.play(e) }) {
+            IconButton(onClick = { if (playingThis) Playback.toggle() else Playback.play(e) }, modifier = Modifier.size(44.dp)) {
                 Icon(
                     if (playingThis) IconPause else Icons.Default.PlayArrow,
                     contentDescription = if (playingThis) "Pause" else "Spel av",
@@ -575,6 +592,110 @@ fun EpisodeRow(e: Episode, showPodcast: Boolean) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp, end = 12.dp),
             )
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Speleliste
+
+@Composable
+fun PlaylistScreen() {
+    val list = Store.playlist
+    if (list.isEmpty()) {
+        Column(
+            Modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Spelelista er tom", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Trykk på liste-ikonet med pluss ved ein episode for å leggja han her. " +
+                    "Episodane blir spela etter kvarandre, og forsvinn frå lista når dei er høyrde ferdig.",
+                textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+    var confirmClear by remember { mutableStateOf(false) }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            text = { Text("Tømme heile spelelista?") },
+            confirmButton = { TextButton(onClick = { Store.clearPlaylist(); confirmClear = false }) { Text("Tøm") } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Avbryt") } },
+        )
+    }
+    // Samla tid som står att å høyra
+    val leftSec = list.sumOf { e ->
+        val pos = Store.positions[e.id]
+        val total = (pos?.durMs?.takeIf { it > 0 } ?: (e.durationSec * 1000L))
+        ((total - (pos?.takeIf { !it.done }?.posMs ?: 0)) / 1000).coerceAtLeast(0)
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 12.dp)) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (list.size == 1) "1 episode" else "${list.size} episodar",
+                        style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (leftSec > 0) Text(
+                        fmtLength(leftSec) + " att", fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = { confirmClear = true }) { Text("Tøm") }
+                Button(onClick = { Playback.play(list.first()) }) {
+                    Icon(Icons.Default.PlayArrow, null)
+                    Text("Spel av")
+                }
+            }
+        }
+        itemsIndexed(list, key = { _, e -> e.id }) { i, e ->
+            PlaylistRow(e, index = i, last = i == list.lastIndex)
+            HorizontalDivider()
+        }
+    }
+}
+
+@Composable
+fun PlaylistRow(e: Episode, index: Int, last: Boolean) {
+    val current = Playback.currentId == e.id
+    val playingThis = current && Playback.isPlaying
+    val pos = Store.positions[e.id]
+    val small = Modifier.size(38.dp)
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable { if (playingThis) Playback.toggle() else Playback.play(e) }
+            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Cover(e.artUrl, 48.dp)
+            if (playingThis) Icon(IconPause, contentDescription = "Spelar no", tint = Color.White, modifier = Modifier.size(28.dp))
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            Text(
+                e.title, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 20.sp,
+                color = if (current) MaterialTheme.colorScheme.primary else Color.Unspecified,
+            )
+            val length = if (pos != null && !pos.done && pos.posMs > 5_000 && pos.durMs > 0) {
+                fmtLength((pos.durMs - pos.posMs) / 1000) + " att"
+            } else fmtLength(e.durationSec.toLong())
+            Text(
+                listOf(e.podcastTitle, length).filter { it.isNotBlank() }.joinToString(" · "),
+                fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = { Store.movePlaylist(index, -1) }, enabled = index > 0, modifier = small) {
+            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Flytt opp")
+        }
+        IconButton(onClick = { Store.movePlaylist(index, 1) }, enabled = !last, modifier = small) {
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Flytt ned")
+        }
+        IconButton(onClick = { Store.removeFromPlaylist(e.id) }, modifier = small) {
+            Icon(Icons.Default.Close, contentDescription = "Ta ut av spelelista", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
